@@ -5,27 +5,46 @@ use std::io;
 use std::iter;
 use std::ops::{Index, IndexMut};
 
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum TokenTemplate<T: TokenPayload> {
+    OpenParen(()),
+    CloseParen(()),
+    Ident(T::String),
+    Int(T::Int),
+    Float(T::Float),
+    Bool(T::Bool),
+    String(T::String),
+}
+
+pub trait TokenPayload {
+    type String;
+    type Int;
+    type Float;
+    type Bool;
+}
+
 #[derive(Clone, PartialEq, Debug)]
-pub enum Token {
-    OpenParen,
-    CloseParen,
-    Ident(String),
-    Int(i64),
-    Float(f64),
-    Bool(bool),
-    String(String),
+pub struct Concrete;
+
+impl TokenPayload for Concrete {
+    type String = String;
+    type Int = i64;
+    type Float = f64;
+    type Bool = bool;
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-enum TokenType {
-    OpenParen,
-    CloseParen,
-    Ident,
-    Int,
-    Float,
-    Bool,
-    String,
+pub struct Tag;
+
+impl TokenPayload for Tag {
+    type String = ();
+    type Int = ();
+    type Float = ();
+    type Bool = ();
 }
+
+pub type Token = TokenTemplate<Concrete>;
+pub type TokenType = TokenTemplate<Tag>;
 
 #[derive(Clone, Debug)]
 pub struct SyntaxError<'a> {
@@ -135,26 +154,91 @@ fn is_delimiter(c: char) -> bool {
     }
 }
 
+macro_rules! table_trans {
+    (
+        $table:ident, $from:ident, $c:ident,
+        $($chunk:tt)*
+    ) => {
+        table_trans! {
+            $table, $from, $c,
+            CONDS []
+            QUEUE [$($chunk)*]
+        }
+    };
+
+    (
+        $table:ident, $from:ident, $c:ident
+        CONDS [$($conds:tt)*]
+        QUEUE []
+    ) => {
+        let empty_table = CharTable([Err("Invalid character"); 256]);
+        let new_table = $table.entry(LexerState::$from).or_insert(empty_table);
+        for i in 0..256 {
+            let $c = (i as u8) as char;
+            $($conds)*
+        }
+    };
+
+    (
+        $table:ident, $from:ident, $c:ident,
+        CONDS [$($conds:tt)*]
+        QUEUE [
+            $cond:expr => $next:ident,
+            $($tail:tt)*
+        ]
+    ) => {
+        table_trans! {
+            $table, $from, $c,
+            CONDS [
+                $($conds)*
+                if $cond { new_table[c] = Ok(TableTrans::empty(LexerState::$next)); }
+            ]
+            QUEUE [$($tail)*]
+        }
+    };
+
+    (
+        $table:ident, $from:ident, $c:ident,
+        CONDS [$($conds:tt)*]
+        QUEUE [
+            $cond:expr => ($next:ident, $out:ident),
+            $($tail:tt)*
+        ]
+    ) => {
+        table_trans! {
+            $table, $from, $c,
+            CONDS [
+                $($conds)*
+                if $cond {
+                    new_table[c] = Ok(TableTrans::output(
+                        LexerState::$next,
+                        TokenTemplate<Tag>::$out(())
+                    ));
+                }
+            ]
+            QUEUE [$($tail)*]
+        }
+    };
+}
+
 lazy_static! {
     static ref LEXER_TABLE: HashMap<LexerState, CharTable<TableResult>> = {
         let mut table = HashMap::new();
-        let empty_table = CharTable([Err("Invalid character"); 256]);
 
-        let non_delimiters = char_compl(is_delimiter);
-        let whitespaces = char_class(char::is_whitespace);
+        table_trans! { table, Ready, c, }
+
+        // table_trans! {
+        //     table, Ready, c,
+        //     char::is_whitespace(c) => Ready,
+        //     !is_delimiter(c) && (c != '#' && c != ',') => Ident,
+        //     c == ';' => Comment,
+        // }
+
+        // table_trans! {
+        //     table, Ident, c,
+        //     is_delimiter(c) => (Ready, Ident(())),
+        // }
         
-        {
-            let ready_table = table.entry(LexerState::Ready).or_insert(empty_table);
-            for c in whitespaces {
-                ready_table[c] = Ok(TableTrans::empty(LexerState::Ready));
-            }
-            for c in non_delimiters {
-                if c != b'#' && c != b',' {
-                    ready_table[c] = Ok(TableTrans::empty(LexerState::Ident));
-                }
-            }
-        }
-            
         table
     };
 }
