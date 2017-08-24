@@ -1,3 +1,4 @@
+use std::ascii::AsciiExt;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
@@ -104,7 +105,7 @@ struct TableTrans {
 }
 
 impl TableTrans {
-    fn output(output: TokenType, next: LexerState) -> TableTrans {
+    fn output(next: LexerState, output: TokenType) -> TableTrans {
         TableTrans {
             output: Some(output),
             next_state: next,
@@ -121,66 +122,41 @@ impl TableTrans {
 
 type TableResult = Result<TableTrans, &'static str>;
 
-struct CharTable<T>([T; 256]);
-
-impl<T> Index<u8> for CharTable<T> {
-    type Output = T;
-
-    fn index(&self, index: u8) -> &T {
-        &self.0[index as usize]
-    }
-}
-
-impl<T> IndexMut<u8> for CharTable<T> {
-    fn index_mut(&mut self, index: u8) -> &mut T {
-        &mut self.0[index as usize]
-    }
-}
-
-fn char_class<P>(pred: P) -> Vec<u8>
-    where P: Fn(char) -> bool {
-    (0..256).filter(|c| pred((*c as u8) as char)).collect()
-}
-
-fn char_compl<P>(pred: P) -> Vec<u8>
-    where P: Fn(char) -> bool {
-    char_class(|c| !pred(c))
-}
-
-fn is_delimiter(c: char) -> bool {
-    match c {
-        '(' | ')' | ';' | '"' | '\'' | '|' | '[' | ']' | '{' | '}' => true,
-        _ => c.is_whitespace(),
-    }
-}
-
 macro_rules! table_trans {
     (
-        $table:ident, $from:ident, $c:ident,
-        $($chunk:tt)*
+        $c:ident,
+        $( $from:ident => { $($chunk:tt)* } )*
     ) => {
-        table_trans! {
-            $table, $from, $c,
-            CONDS []
-            QUEUE [$($chunk)*]
+        {
+            let mut table = HashMap::new();
+
+            $(table_trans! {
+                BRANCH [table, $from, $c, new_table]
+                CONDS []
+                QUEUE [$($chunk)*]
+            })*
+
+            table
         }
     };
 
     (
-        $table:ident, $from:ident, $c:ident
+        BRANCH [$table:ident, $from:ident, $c:ident, $new_table:ident]
         CONDS [$($conds:tt)*]
         QUEUE []
     ) => {
-        let empty_table = CharTable([Err("Invalid character"); 256]);
-        let new_table = $table.entry(LexerState::$from).or_insert(empty_table);
-        for i in 0..256 {
-            let $c = (i as u8) as char;
-            $($conds)*
+        {
+            let empty_table = [Err("Invalid character"); 256];
+            let $new_table = $table.entry(LexerState::$from).or_insert(empty_table);
+            for i in 0..256 {
+                let $c = i as u8;
+                $($conds)*
+            }
         }
     };
 
     (
-        $table:ident, $from:ident, $c:ident,
+        BRANCH [$table:ident, $from:ident, $c:ident, $new_table:ident]
         CONDS [$($conds:tt)*]
         QUEUE [
             $cond:expr => $next:ident,
@@ -188,17 +164,19 @@ macro_rules! table_trans {
         ]
     ) => {
         table_trans! {
-            $table, $from, $c,
+            BRANCH [$table, $from, $c, $new_table]
             CONDS [
                 $($conds)*
-                if $cond { new_table[c] = Ok(TableTrans::empty(LexerState::$next)); }
+                if $cond {
+                    $new_table[$c as usize] = Ok(TableTrans::empty(LexerState::$next));
+                }
             ]
             QUEUE [$($tail)*]
         }
     };
 
     (
-        $table:ident, $from:ident, $c:ident,
+        BRANCH [$table:ident, $from:ident, $c:ident, $new_table:ident]
         CONDS [$($conds:tt)*]
         QUEUE [
             $cond:expr => ($next:ident, $out:ident),
@@ -206,13 +184,13 @@ macro_rules! table_trans {
         ]
     ) => {
         table_trans! {
-            $table, $from, $c,
+            BRANCH [$table, $from, $c, $new_table]
             CONDS [
                 $($conds)*
                 if $cond {
-                    new_table[c] = Ok(TableTrans::output(
+                    $new_table[$c as usize] = Ok(TableTrans::output(
                         LexerState::$next,
-                        TokenTemplate<Tag>::$out(())
+                        TokenTemplate::$out(())
                     ));
                 }
             ]
@@ -222,24 +200,25 @@ macro_rules! table_trans {
 }
 
 lazy_static! {
-    static ref LEXER_TABLE: HashMap<LexerState, CharTable<TableResult>> = {
-        let mut table = HashMap::new();
+    static ref LEXER_TABLE: HashMap<LexerState, [TableResult; 256]> = {
+        fn is_delimiter(c: u8) -> bool {
+            match c {
+                b'(' | b')' | b';' | b'"' | b'\'' | b'|' | b'[' | b']' | b'{' | b'}' => true,
+                _ => c.is_ascii_whitespace(),
+            }
+        }
 
-        table_trans! { table, Ready, c, }
-
-        // table_trans! {
-        //     table, Ready, c,
-        //     char::is_whitespace(c) => Ready,
-        //     !is_delimiter(c) && (c != '#' && c != ',') => Ident,
-        //     c == ';' => Comment,
-        // }
-
-        // table_trans! {
-        //     table, Ident, c,
-        //     is_delimiter(c) => (Ready, Ident(())),
-        // }
-        
-        table
+        table_trans! {
+            c,
+            Ready => {
+                c.is_ascii_whitespace() => Ready,
+                !is_delimiter(c) && (c != b'#' && c != b',') => Ident,
+                c == b';' => Comment,
+            }
+            Ident => {
+                is_delimiter(c) => (Ready, Ident),
+            }
+        }
     };
 }
 
