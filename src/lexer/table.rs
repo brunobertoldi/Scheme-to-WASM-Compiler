@@ -1,105 +1,10 @@
 use std::ascii::AsciiExt;
 use std::collections::HashMap;
-use std::error::Error;
-use std::fmt;
-use std::io;
-use std::iter;
-use std::ops::{Index, IndexMut};
 
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub enum TokenTemplate<T: TokenPayload> {
-    OpenParen(()),
-    CloseParen(()),
-    Ident(T::String),
-    Int(T::Int),
-    Float(T::Float),
-    Bool(T::Bool),
-    String(T::String),
-}
-
-pub trait TokenPayload {
-    type String;
-    type Int;
-    type Float;
-    type Bool;
-}
-
-#[derive(Clone, PartialEq, Debug)]
-pub struct Concrete;
-
-impl TokenPayload for Concrete {
-    type String = String;
-    type Int = i64;
-    type Float = f64;
-    type Bool = bool;
-}
-
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub struct Tag;
-
-impl TokenPayload for Tag {
-    type String = ();
-    type Int = ();
-    type Float = ();
-    type Bool = ();
-}
-
-pub type Token = TokenTemplate<Concrete>;
-pub type TokenType = TokenTemplate<Tag>;
-
-#[derive(Clone, Debug)]
-pub struct SyntaxError<'a> {
-    file_name: &'a str,
-    line: u32,
-    message: String,
-}
-
-impl<'a> fmt::Display for SyntaxError<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SyntaxError ({}:{}): {}", self.file_name, self.line, self.message)
-    }
-}
-
-impl<'a> Error for SyntaxError<'a> {
-    fn description(&self) -> &str {
-        "SyntaxError"
-    }
-
-    fn cause(&self) -> Option<&Error> {
-        None
-    }
-}
-
-macro_rules! syntax_error {
-    ($file_name:expr, $lexer:ident, $($arg:tt)*) => {
-        return Err(SyntaxError {
-            file_name: $file_name,
-            line: $lexer.line,
-            message: format!($($arg)*),
-        })
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-enum LexerState {
-    Ready,
-    Comment,
-    Ident,
-    Int,
-    Float,
-    Bool,
-    String,
-}
-
-#[derive(Clone, Debug)]
-pub struct Lexer {
-    line: u32,
-    state: LexerState,
-    current: Vec<u8>,
-}
+use lexer::{LexerState, TokenTemplate, TokenType};
 
 #[derive(Clone, Copy, Debug)]
-struct TableTrans {
+pub struct TableTrans {
     output: Option<TokenType>,
     next_state: LexerState,
 }
@@ -120,7 +25,7 @@ impl TableTrans {
     }
 }
 
-type TableResult = Result<TableTrans, &'static str>;
+pub type TableResult = Result<TableTrans, ()>;
 
 macro_rules! table_trans {
     (
@@ -146,11 +51,13 @@ macro_rules! table_trans {
         QUEUE []
     ) => {
         {
-            let empty_table = [Err("Invalid character"); 256];
+            let empty_table = [Err(()); 256];
             let $new_table = $table.entry(LexerState::$from).or_insert(empty_table);
             for i in 0..256 {
                 let $c = i as u8;
-                $($conds)*
+                if $c.is_ascii_whitespace() || $c.is_ascii_graphic() {
+                    $($conds)*
+                }
             }
         }
     };
@@ -200,7 +107,7 @@ macro_rules! table_trans {
 }
 
 lazy_static! {
-    static ref LEXER_TABLE: HashMap<LexerState, [TableResult; 256]> = {
+    pub static ref LEXER_TABLE: HashMap<LexerState, [TableResult; 256]> = {
         fn is_delimiter(c: u8) -> bool {
             match c {
                 b'(' | b')' | b';' | b'"' | b'\'' | b'|' | b'[' | b']' | b'{' | b'}' => true,
@@ -212,26 +119,43 @@ lazy_static! {
             c,
             Ready => {
                 c.is_ascii_whitespace() => Ready,
-                !is_delimiter(c) && (c != b'#' && c != b',') => Ident,
+                c == b'(' => (Ready, OpenParen),
+                c == b')' => (Ready, CloseParen),
                 c == b';' => Comment,
+                c == b'+' || c == b'-' => Sign,
+                c.is_ascii_digit() => Int,
+                c == b'"' => String,
+                !is_delimiter(c) && c != b',' => Ident,
+            }
+            Comment => {
+                c == b'\n' => Ready,
+                true => Comment,
             }
             Ident => {
                 is_delimiter(c) => (Ready, Ident),
+                true => Ident,
+            }
+            Sign => {
+                is_delimiter(c) => (Ready, Ident),
+                c.is_ascii_digit() => Int,
+                true => Ident,
+            }
+            Int => {
+                is_delimiter(c) => (Ready, Int),
+                c == b'.' => Float,
+                !c.is_ascii_digit() => Ident,
+            }
+            Float => {
+                is_delimiter(c) => (Ready, Float),
+                !c.is_ascii_digit() => Ident,
+            }
+            String => {
+                c == b'"' => (Ready, String),
+                c == b'\\' => StringEscape,
+            }
+            StringEscape => {
+                true => String,
             }
         }
     };
-}
-
-impl Lexer {
-    pub fn new() -> Self {
-        Lexer {
-            line: 0,
-            state: LexerState::Ready,
-            current: Vec::new(),
-        }
-    }
-
-    pub fn push_char<'a>(file_name: &'a str, c: u8) -> Result<Option<Token>, SyntaxError<'a>> {
-        Ok(None)
-    }
 }
