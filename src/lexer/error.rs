@@ -1,4 +1,3 @@
-use std::ascii::escape_default;
 use std::error;
 use std::fmt;
 use std::result;
@@ -7,9 +6,9 @@ pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Clone, Debug)]
 pub struct Error {
-    file_name: String,
-    line: u32,
-    kind: ErrorKind,
+    pub file_name: String,
+    pub line: u32,
+    pub kind: ErrorKind,
 }
 
 impl fmt::Display for Error {
@@ -41,15 +40,5 @@ impl fmt::Display for ErrorKind {
             &ErrorKind::InvalidCharacter(c) =>
                 write!(f, "Invalid character '{}'", (c as char).escape_default()),
         }
-    }
-}
-
-macro_rules! syntax_error {
-    ($file_name:expr, $lexer:ident, $($arg:tt)*) => {
-        return Err(SyntaxError {
-            file_name: $file_name,
-            line: $lexer.line,
-            message: format!($($arg)*),
-        })
     }
 }

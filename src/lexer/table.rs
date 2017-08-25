@@ -5,8 +5,8 @@ use lexer::{LexerState, TokenTemplate, TokenType};
 
 #[derive(Clone, Copy, Debug)]
 pub struct TableTrans {
-    output: Option<TokenType>,
-    next_state: LexerState,
+    pub output: Option<TokenType>,
+    pub next_state: LexerState,
 }
 
 impl TableTrans {

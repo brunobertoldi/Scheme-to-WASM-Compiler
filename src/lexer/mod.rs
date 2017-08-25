@@ -1,45 +1,10 @@
 mod error;
 mod table;
+mod token;
 
 pub use self::error::*;
-use self::table::LEXER_TABLE;
-
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub enum TokenTemplate<T: TokenPayload> {
-    OpenParen(()),
-    CloseParen(()),
-    Ident(T::String),
-    Int(T::Int),
-    Float(T::Float),
-    String(T::String),
-}
-
-pub trait TokenPayload {
-    type String;
-    type Int;
-    type Float;
-}
-
-#[derive(Clone, PartialEq, Debug)]
-pub struct Concrete;
-
-impl TokenPayload for Concrete {
-    type String = String;
-    type Int = i64;
-    type Float = f64;
-}
-
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub struct Tag;
-
-impl TokenPayload for Tag {
-    type String = ();
-    type Int = ();
-    type Float = ();
-}
-
-pub type Token = TokenTemplate<Concrete>;
-pub type TokenType = TokenTemplate<Tag>;
+pub use self::token::*;
+use self::table::{LEXER_TABLE, TableTrans};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum LexerState {
@@ -53,23 +18,60 @@ pub enum LexerState {
     StringEscape,
 }
 
-#[derive(Clone, Debug)]
-pub struct Lexer {
+impl LexerState {
+    fn accum(&self) -> bool {
+        match self {
+            &LexerState::Ready | &LexerState::Comment => false,
+            _ => true,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Lexer<'a> {
+    file_name: &'a str,
     line: u32,
     state: LexerState,
     current: Vec<u8>,
 }
 
-impl Lexer {
-    pub fn new() -> Self {
+impl<'a> Lexer<'a> {
+    pub fn new(file_name: &'a str) -> Self {
         Lexer {
+            file_name: file_name,
             line: 0,
             state: LexerState::Ready,
             current: Vec::new(),
         }
     }
 
-    pub fn push_char(file_name: &str, c: u8) -> Result<Option<Token>> {
-        Ok(None)
+    pub fn push_char(&mut self, c: u8) -> Result<Option<Token>> {
+        if c == b'\n' {
+            self.line += 1;
+        }
+
+        match LEXER_TABLE[&self.state][c as usize] {
+            Ok(TableTrans {output, next_state}) => {
+                let result = if let Some(output_type) = output {
+                    let r = output_type.parse(&self.current).expect("Invalid lexer table");
+                    self.current.clear();
+                    Some(r)
+                } else {
+                    None
+                };
+
+                if next_state.accum() {
+                    self.current.push(c);
+                }
+                self.state = next_state;
+
+                Ok(result)
+            }
+            Err(_) => Err(Error {
+                file_name: self.file_name.to_owned(),
+                line: self.line,
+                kind: ErrorKind::InvalidCharacter(c),
+            })
+        }
     }
 }
