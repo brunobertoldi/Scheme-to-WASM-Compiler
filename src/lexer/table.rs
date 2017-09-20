@@ -1,7 +1,7 @@
 use std::ascii::AsciiExt;
 use std::collections::HashMap;
 
-use lexer::{LexerState, TokenTemplate, TokenType};
+use lexer::{LexerState, TokenType};
 
 #[derive(Clone, Copy, Debug)]
 pub struct TableTrans {
@@ -56,7 +56,7 @@ macro_rules! table_trans {
             for i in 0..256 {
                 let $c = i as u8;
                 if $c.is_ascii_whitespace() || $c.is_ascii_graphic() {
-                    $($conds)*
+                    $($conds)* {}
                 }
             }
         }
@@ -76,7 +76,7 @@ macro_rules! table_trans {
                 $($conds)*
                 if $cond {
                     $new_table[$c as usize] = Ok(TableTrans::empty(LexerState::$next));
-                }
+                } else
             ]
             QUEUE [$($tail)*]
         }
@@ -97,9 +97,9 @@ macro_rules! table_trans {
                 if $cond {
                     $new_table[$c as usize] = Ok(TableTrans::output(
                         LexerState::$next,
-                        TokenTemplate::$out(())
+                        TokenType::$out
                     ));
-                }
+                } else
             ]
             QUEUE [$($tail)*]
         }

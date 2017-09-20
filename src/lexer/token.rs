@@ -1,74 +1,58 @@
+use std::error::Error;
 use std::fmt::{self, Write};
 use std::str;
 
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub enum TokenTemplate<T: TokenPayload> {
-    OpenParen(()),
-    CloseParen(()),
-    Ident(T::String),
-    Int(T::Int),
-    Float(T::Float),
-    String(T::String),
+tokens! {
+    Token, TokenType {
+        OpenParen,
+        CloseParen,
+        Ident(String),
+        Int(i64),
+        Float(f64),
+        String(String),
+    }
 }
 
-pub trait TokenPayload {
-    type String;
-    type Int;
-    type Float;
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct VoidError;
+
+impl<T: Error> From<T> for VoidError {
+    fn from(_: T) -> Self {
+        VoidError
+    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
-pub struct Concrete;
-
-impl TokenPayload for Concrete {
-    type String = String;
-    type Int = i64;
-    type Float = f64;
-}
-
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub struct Tag;
-
-impl TokenPayload for Tag {
-    type String = ();
-    type Int = ();
-    type Float = ();
-}
-
-pub type Token = TokenTemplate<Concrete>;
-pub type TokenType = TokenTemplate<Tag>;
-
-impl TokenTemplate<Tag> {
-    pub fn parse(&self, bytes: &[u8]) -> Result<TokenTemplate<Concrete>, ()> {
+impl TokenType {
+    pub fn parse(&self, bytes: &[u8]) -> Result<Token, VoidError> {
         let str = unsafe { str::from_utf8_unchecked(bytes) };
         match self {
-            &TokenTemplate::OpenParen(_) => if str.is_empty() {
-                Ok(TokenTemplate::OpenParen(()))
+            &TokenType::OpenParen => if str.is_empty() {
+                Ok(Token::OpenParen)
             } else {
-                Err(())
+                Err(VoidError)
             },
-            &TokenTemplate::CloseParen(_) => if str.is_empty() {
-                Ok(TokenTemplate::CloseParen(()))
+            &TokenType::CloseParen => if str.is_empty() {
+                Ok(Token::CloseParen)
             } else {
-                Err(())
+                Err(VoidError)
             },
-            &TokenTemplate::Ident(_) => Ok(TokenTemplate::Ident(str.to_owned())),
-            &TokenTemplate::Int(_) => Ok(TokenTemplate::Int(str.parse().map_err(|_| ())?)),
-            &TokenTemplate::Float(_) => Ok(TokenTemplate::Float(str.parse().map_err(|_| ())?)),
-            &TokenTemplate::String(_) => Ok(TokenTemplate::String(str[1..].to_owned())),
+            &TokenType::Ident => Ok(Token::Ident(str.to_owned())),
+            &TokenType::Int => Ok(Token::Int(str.parse()?)),
+            &TokenType::Float => Ok(Token::Float(str.parse()?)),
+            &TokenType::String => Ok(Token::String(str[1..].to_owned())),
         }
     }
 }
 
-impl fmt::Display for TokenTemplate<Concrete> {
+impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &TokenTemplate::OpenParen(_) => f.write_char('('),
-            &TokenTemplate::CloseParen(_) => f.write_char(')'),
-            &TokenTemplate::Ident(ref s) => f.write_str(s),
-            &TokenTemplate::Int(ref n) => write!(f, "{}", n),
-            &TokenTemplate::Float(ref n) => write!(f, "{}", n),
-            &TokenTemplate::String(ref s) => write!(f, "\"{}\"", s),
+            &Token::OpenParen => f.write_char('('),
+            &Token::CloseParen => f.write_char(')'),
+            &Token::Ident(ref s) => f.write_str(s),
+            &Token::Int(ref n) => write!(f, "{}", n),
+            &Token::Float(ref n) => write!(f, "{}", n),
+            &Token::String(ref s) => write!(f, "{:?}", s),
         }
     }
 }

@@ -1,6 +1,9 @@
 mod error;
+#[macro_use] mod macros;
 mod table;
 mod token;
+
+use std::str;
 
 pub use self::error::*;
 pub use self::token::*;
@@ -20,8 +23,8 @@ pub enum LexerState {
 
 impl LexerState {
     fn accum(&self) -> bool {
-        match self {
-            &LexerState::Ready | &LexerState::Comment => false,
+        match *self {
+            LexerState::Ready | LexerState::Comment => false,
             _ => true,
         }
     }
@@ -60,10 +63,12 @@ impl<'a> Lexer<'a> {
                     None
                 };
 
+                println!("Current: {}", unsafe {str::from_utf8_unchecked(&self.current)});
+                println!("{:?} + '{}' => {:?}", self.state, (c as char).escape_default(), next_state);
+                self.state = next_state;
                 if next_state.accum() {
                     self.current.push(c);
                 }
-                self.state = next_state;
 
                 Ok(result)
             }
@@ -75,3 +80,8 @@ impl<'a> Lexer<'a> {
         }
     }
 }
+
+// impl<'a> StreamMap<u8, Token> for Lexer<'a> {
+//     fn produce(&mut self, u8) -> Vec<Token> {
+//     }
+// }
