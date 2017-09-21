@@ -29,7 +29,7 @@ macro_rules! tokens_impl {
             $( $variants )*
         }
 
-        #[derive(Copy, Clone, PartialEq, Debug)]
+        #[derive(Copy, Clone, PartialEq, Eq, Debug)]
         pub enum $tag_name {
             $( $tokens )*
         }

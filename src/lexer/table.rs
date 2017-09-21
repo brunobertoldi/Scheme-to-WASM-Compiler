@@ -3,26 +3,18 @@ use std::collections::HashMap;
 
 use lexer::{LexerState, TokenType};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TableTrans {
     pub output: Option<TokenType>,
     pub next_state: LexerState,
+    pub consume: Consume,
 }
 
-impl TableTrans {
-    fn output(next: LexerState, output: TokenType) -> TableTrans {
-        TableTrans {
-            output: Some(output),
-            next_state: next,
-        }
-    }
-
-    fn empty(next: LexerState) -> TableTrans {
-        TableTrans {
-            output: None,
-            next_state: next,
-        }
-    }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Consume {
+    Append,
+    Skip,
+    Ungetc,
 }
 
 pub type TableResult = Result<TableTrans, ()>;
@@ -66,7 +58,7 @@ macro_rules! table_trans {
         BRANCH [$table:ident, $from:ident, $c:ident, $new_table:ident]
         CONDS [$($conds:tt)*]
         QUEUE [
-            $cond:expr => $next:ident,
+            $cond:expr => $consume:ident $next:ident,
             $($tail:tt)*
         ]
     ) => {
@@ -75,7 +67,11 @@ macro_rules! table_trans {
             CONDS [
                 $($conds)*
                 if $cond {
-                    $new_table[$c as usize] = Ok(TableTrans::empty(LexerState::$next));
+                    $new_table[$c as usize] = Ok(TableTrans {
+                        output: None,
+                        next_state: LexerState::$next,
+                        consume: Consume::$consume,
+                    });
                 } else
             ]
             QUEUE [$($tail)*]
@@ -86,7 +82,7 @@ macro_rules! table_trans {
         BRANCH [$table:ident, $from:ident, $c:ident, $new_table:ident]
         CONDS [$($conds:tt)*]
         QUEUE [
-            $cond:expr => ($next:ident, $out:ident),
+            $cond:expr => $consume:ident ($next:ident, $out:ident),
             $($tail:tt)*
         ]
     ) => {
@@ -95,10 +91,11 @@ macro_rules! table_trans {
             CONDS [
                 $($conds)*
                 if $cond {
-                    $new_table[$c as usize] = Ok(TableTrans::output(
-                        LexerState::$next,
-                        TokenType::$out
-                    ));
+                    $new_table[$c as usize] = Ok(TableTrans {
+                        output: Some(TokenType::$out),
+                        next_state: LexerState::$next,
+                        consume: Consume::$consume,
+                    });
                 } else
             ]
             QUEUE [$($tail)*]
@@ -118,43 +115,43 @@ lazy_static! {
         table_trans! {
             c,
             Ready => {
-                c.is_ascii_whitespace() => Ready,
-                c == b'(' => (Ready, OpenParen),
-                c == b')' => (Ready, CloseParen),
-                c == b';' => Comment,
-                c == b'+' || c == b'-' => Sign,
-                c.is_ascii_digit() => Int,
-                c == b'"' => String,
-                !is_delimiter(c) && c != b',' => Ident,
+                c.is_ascii_whitespace() => Skip Ready,
+                c == b'(' => Skip (Ready, OpenParen),
+                c == b')' => Skip (Ready, CloseParen),
+                c == b';' => Skip Comment,
+                c == b'+' || c == b'-' => Append Sign,
+                c.is_ascii_digit() => Append Int,
+                c == b'"' => Ungetc String,
+                !is_delimiter(c) && c != b',' => Append Ident,
             }
             Comment => {
-                c == b'\n' => Ready,
-                true => Comment,
+                c == b'\n' => Skip Ready,
+                true => Skip Comment,
             }
             Ident => {
-                is_delimiter(c) => (Ready, Ident),
-                true => Ident,
+                is_delimiter(c) => Ungetc (Ready, Ident),
+                true => Append Ident,
             }
             Sign => {
-                is_delimiter(c) => (Ready, Ident),
-                c.is_ascii_digit() => Int,
-                true => Ident,
+                is_delimiter(c) => Ungetc (Ready, Ident),
+                c.is_ascii_digit() => Append Int,
+                true => Append Ident,
             }
             Int => {
-                is_delimiter(c) => (Ready, Int),
-                c == b'.' => Float,
-                !c.is_ascii_digit() => Ident,
+                is_delimiter(c) => Ungetc (Ready, Int),
+                c == b'.' => Append Float,
+                !c.is_ascii_digit() => Append Ident,
             }
             Float => {
-                is_delimiter(c) => (Ready, Float),
-                !c.is_ascii_digit() => Ident,
+                is_delimiter(c) => Ungetc (Ready, Float),
+                !c.is_ascii_digit() => Append Ident,
             }
             String => {
-                c == b'"' => (Ready, String),
-                c == b'\\' => StringEscape,
+                c == b'"' => Skip (Ready, String),
+                c == b'\\' => Skip StringEscape,
             }
             StringEscape => {
-                true => String,
+                true => Append String,
             }
         }
     };

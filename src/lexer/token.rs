@@ -24,22 +24,22 @@ impl<T: Error> From<T> for VoidError {
 
 impl TokenType {
     pub fn parse(&self, bytes: &[u8]) -> Result<Token, VoidError> {
-        let str = unsafe { str::from_utf8_unchecked(bytes) };
+        let s = unsafe { str::from_utf8_unchecked(bytes) };
         match self {
-            &TokenType::OpenParen => if str.is_empty() {
+            &TokenType::OpenParen => if s.is_empty() {
                 Ok(Token::OpenParen)
             } else {
                 Err(VoidError)
             },
-            &TokenType::CloseParen => if str.is_empty() {
+            &TokenType::CloseParen => if s.is_empty() {
                 Ok(Token::CloseParen)
             } else {
                 Err(VoidError)
             },
-            &TokenType::Ident => Ok(Token::Ident(str.to_owned())),
-            &TokenType::Int => Ok(Token::Int(str.parse()?)),
-            &TokenType::Float => Ok(Token::Float(str.parse()?)),
-            &TokenType::String => Ok(Token::String(str[1..].to_owned())),
+            &TokenType::Ident => Ok(Token::Ident(s.to_owned())),
+            &TokenType::Int => Ok(Token::Int(s.parse()?)),
+            &TokenType::Float => Ok(Token::Float(s.parse()?)),
+            &TokenType::String => Ok(Token::String(s.to_owned())),
         }
     }
 }

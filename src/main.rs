@@ -15,7 +15,7 @@ fn main() {
     let source = io::stdin().bytes().map(|b| b.unwrap()).chain(vec![b'\n'].into_iter());
     for res in lexer.iter(source) {
         match res {
-            Ok(t) => print!("{}", t),
+            Ok(t) => print!("{} ", t),
             Err(e) => {
                 println!("\nError: {}", e);
                 return;

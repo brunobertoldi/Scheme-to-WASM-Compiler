@@ -9,7 +9,7 @@ use iter::{StreamAdapter, StreamMap};
 
 pub use self::error::*;
 pub use self::token::*;
-use self::table::{LEXER_TABLE, TableTrans};
+use self::table::{LEXER_TABLE, Consume, TableTrans};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum LexerState {
@@ -22,15 +22,6 @@ pub enum LexerState {
     String,
     StringEscape,
 }
-
-// impl LexerState {
-//     fn consume(&self) -> bool {
-//         match *self {
-//             LexerState::Ready | LexerState::Comment => false,
-//             _ => true,
-//         }
-//     }
-// }
 
 #[derive(Debug)]
 pub struct Lexer<'a> {
@@ -61,19 +52,19 @@ impl<'a> Lexer<'a> {
         }
 
         match LEXER_TABLE[&self.state][c as usize] {
-            Ok(TableTrans {output, next_state}) => {
+            Ok(TableTrans {output, next_state, consume}) => {
+                if consume == Consume::Append {
+                    self.current.push(c);
+                }
+
                 if let Some(output_type) = output {
                     let token = output_type.parse(&self.current).expect("Invalid lexer table");
                     out.push(token);
                     self.current.clear();
                 };
 
-                println!("Current: {}", unsafe {str::from_utf8_unchecked(&self.current)});
-                println!("{:?} + '{}' => {:?}", self.state, (c as char).escape_default(), next_state);
-                let old_state = self.state;
                 self.state = next_state;
-                self.current.push(c);
-                if self.state != old_state {
+                if consume == Consume::Ungetc {
                     self.push_char(c, out)?;
                 }
 
@@ -90,7 +81,6 @@ impl<'a> Lexer<'a> {
 
 impl<'a> StreamMap<u8, Result<Token>> for Lexer<'a> {
     fn produce(&mut self, c: u8) -> Vec<Result<Token>> {
-        println!("Out, producting for '{}'", (c as char).escape_default());
         let mut v = Vec::new();
         match self.push_char(c, &mut v) {
             Ok(_) => v.into_iter().map(|x| Ok(x)).collect(),
