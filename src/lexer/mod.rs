@@ -16,6 +16,8 @@ pub enum LexerState {
     Ready,
     Comment,
     Ident,
+    Hash,
+    Bool,
     Sign,
     Int,
     Float,

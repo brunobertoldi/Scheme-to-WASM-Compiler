@@ -120,6 +120,7 @@ lazy_static! {
                 c == b')' => Skip (Ready, CloseParen),
                 c == b';' => Skip Comment,
                 c == b'+' || c == b'-' => Append Sign,
+                c == b'#' => Skip Hash,
                 c.is_ascii_digit() => Append Int,
                 c == b'"' => Ungetc String,
                 !is_delimiter(c) && c != b',' => Append Ident,
@@ -131,6 +132,12 @@ lazy_static! {
             Ident => {
                 is_delimiter(c) => Ungetc (Ready, Ident),
                 true => Append Ident,
+            }
+            Hash => {
+                c == b't' || c == b'f' => Append Bool,
+            }
+            Bool => {
+                is_delimiter(c) => Ungetc (Ready, Bool),
             }
             Sign => {
                 is_delimiter(c) => Ungetc (Ready, Ident),
