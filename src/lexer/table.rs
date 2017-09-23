@@ -28,9 +28,9 @@ macro_rules! table_trans {
             let mut table = HashMap::new();
 
             $(table_trans! {
-                BRANCH [table, $from, $c, new_table]
-                CONDS []
-                QUEUE [$($chunk)*]
+                @branch [table, $from, $c, new_table]
+                @conds []
+                @queue [$($chunk)*]
             })*
 
             table
@@ -38,9 +38,9 @@ macro_rules! table_trans {
     };
 
     (
-        BRANCH [$table:ident, $from:ident, $c:ident, $new_table:ident]
-        CONDS [$($conds:tt)*]
-        QUEUE []
+        @branch [$table:ident, $from:ident, $c:ident, $new_table:ident]
+        @conds [$($conds:tt)*]
+        @queue []
     ) => {
         {
             let empty_table = [Err(()); 256];
@@ -55,16 +55,16 @@ macro_rules! table_trans {
     };
 
     (
-        BRANCH [$table:ident, $from:ident, $c:ident, $new_table:ident]
-        CONDS [$($conds:tt)*]
-        QUEUE [
+        @branch [$table:ident, $from:ident, $c:ident, $new_table:ident]
+        @conds [$($conds:tt)*]
+        @queue [
             $cond:expr => $consume:ident $next:ident,
             $($tail:tt)*
         ]
     ) => {
         table_trans! {
-            BRANCH [$table, $from, $c, $new_table]
-            CONDS [
+            @branch [$table, $from, $c, $new_table]
+            @conds [
                 $($conds)*
                 if $cond {
                     $new_table[$c as usize] = Ok(TableTrans {
@@ -74,21 +74,21 @@ macro_rules! table_trans {
                     });
                 } else
             ]
-            QUEUE [$($tail)*]
+            @queue [$($tail)*]
         }
     };
 
     (
-        BRANCH [$table:ident, $from:ident, $c:ident, $new_table:ident]
-        CONDS [$($conds:tt)*]
-        QUEUE [
+        @branch [$table:ident, $from:ident, $c:ident, $new_table:ident]
+        @conds [$($conds:tt)*]
+        @queue [
             $cond:expr => $consume:ident ($next:ident, $out:ident),
             $($tail:tt)*
         ]
     ) => {
         table_trans! {
-            BRANCH [$table, $from, $c, $new_table]
-            CONDS [
+            @branch [$table, $from, $c, $new_table]
+            @conds [
                 $($conds)*
                 if $cond {
                     $new_table[$c as usize] = Ok(TableTrans {
@@ -98,7 +98,7 @@ macro_rules! table_trans {
                     });
                 } else
             ]
-            QUEUE [$($tail)*]
+            @queue [$($tail)*]
         }
     };
 }
