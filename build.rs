@@ -103,7 +103,7 @@ enum MatcherAttribute {
 
 enum FormatPattern {
     Production(String),
-    Literal(u8),
+    Literal(String),
 }
 
 trait Pattern {
@@ -204,6 +204,7 @@ fn parse_left(source: &mut ByteIter) -> Result<PartialProduction> {
 
     let param = if guard == b'(' {
         let (param, _) = read_until(source, &[&b')'])?;
+        read_until(source, &[&b"->"])?;
         Some(String::from_utf8(param)?)
     } else {
         None
@@ -234,10 +235,11 @@ fn parse_word(word: &[u8]) -> Result<FormatPart> {
         (None, word)
     };
 
-    let pattern = if char_fmt.len() > 1 {
-        FormatPattern::Production(String::from_utf8(char_fmt.to_owned())?)
+    let inner_pat = String::from_utf8(char_fmt.to_owned())?;
+    let pattern = if char_fmt.len() > 1 && (char_fmt[0] as char).is_uppercase() {
+        FormatPattern::Production(inner_pat)
     } else {
-        FormatPattern::Literal(char_fmt[0])
+        FormatPattern::Literal(inner_pat)
     };
 
     Ok(FormatPart {
@@ -258,7 +260,7 @@ fn parse_right(right: &[u8]) -> Result<Vec<ProductionInput>> {
             for c in raw_fmt[0]..(raw_fmt[3] + 1) {
                 let parts = vec![FormatPart {
                     attr: None,
-                    pattern: FormatPattern::Literal(c),
+                    pattern: FormatPattern::Literal(String::from_utf8(vec![c])?),
                 }];
                 inputs.push(ProductionInput {
                     output: None,
@@ -335,7 +337,7 @@ fn compile(input: File, output: &mut Write) -> Result<()> {
             for part in &inp.format {
                 match part.pattern {
                     FormatPattern::Production(ref s) => { write!(output, "{}", s)?; }
-                    FormatPattern::Literal(ref c) => { output.write(&[*c])?; }
+                    FormatPattern::Literal(ref s) => { write!(output, "{}", s)?; }
                 }
                 if let Some(ref attr) = part.attr {
                     match *attr {
