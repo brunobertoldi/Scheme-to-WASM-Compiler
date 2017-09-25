@@ -107,16 +107,25 @@ enum FormatPattern {
 }
 
 trait Pattern {
+    fn consume_next(&self) -> bool;
     fn matches(&self, current: u8, next: Option<u8>) -> bool;
 }
 
 impl Pattern for u8 {
+    fn consume_next(&self) -> bool {
+        false
+    }
+
     fn matches(&self, current: u8, _: Option<u8>) -> bool {
         &current == self
     }
 }
 
 impl<'a> Pattern for &'a [u8; 2] {
+    fn consume_next(&self) -> bool {
+        true
+    }
+
     fn matches(&self, current: u8, next: Option<u8>) -> bool {
         current == self[0] && next == Some(self[1])
     }
@@ -151,6 +160,9 @@ fn read_until_opt<'a, 'b, I>(r: &mut Peekable<I>, pats: &[&'a Pattern]) -> Resul
 
         for pat in pats {
             if pat.matches(c, next) {
+                if pat.consume_next() {
+                    r.next();
+                }
                 return Ok((out, Some(c)))
             }
         }
@@ -243,7 +255,7 @@ fn parse_right(right: &[u8]) -> Result<Vec<ProductionInput>> {
         last_delim = delim;
 
         if raw_fmt.len() == 4 && raw_fmt[1] == b'.' && raw_fmt[2] == b'.' {
-            for c in raw_fmt[0]..raw_fmt[3] {
+            for c in raw_fmt[0]..(raw_fmt[3] + 1) {
                 let parts = vec![FormatPart {
                     attr: None,
                     pattern: FormatPattern::Literal(c),
@@ -304,8 +316,44 @@ fn parse_grammar(source: &mut ByteIter) -> Result<HashMap<String, Production>> {
 
 fn compile(input: File, output: &mut Write) -> Result<()> {
     let productions = parse_grammar(&mut input.bytes().peekable())?;
-    for k in productions.keys() {
-        writeln!(output, "{}", k);
+    for (name, prod) in productions {
+        if !prod.is_token {
+            output.write(b"_")?;
+        }
+        write!(output, "{}", name)?;
+        if let Some(param) = prod.param {
+            write!(output, "({})", param)?;
+        }
+        output.write(b" -> ")?;
+        let mut is_first = true;
+        for inp in &prod.inputs {
+            if !is_first {
+                output.write(b"| ")?;
+            }
+            is_first = false;
+
+            for part in &inp.format {
+                match part.pattern {
+                    FormatPattern::Production(ref s) => { write!(output, "{}", s)?; }
+                    FormatPattern::Literal(ref c) => { output.write(&[*c])?; }
+                }
+                if let Some(ref attr) = part.attr {
+                    match *attr {
+                        MatcherAttribute::Many => output.write(b"*")?,
+                        MatcherAttribute::Many1 => output.write(b"+")?,
+                        MatcherAttribute::Void => output.write(b"_")?,
+                    };
+                }
+
+                if let Some(ref o) = inp.output {
+                    write!(output, " => {}", o)?;
+                }
+
+                output.write(b" ")?;
+            }
+        }
+
+        output.write(b"\n")?;
     }
     Ok(())
 }
