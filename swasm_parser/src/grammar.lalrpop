@@ -6,11 +6,7 @@ pub Node: Node = {
     "'|quote" => Node::Quote,
     "if" => Node::If,
     "(" <Node*> ")" => Node::List(<>),
-    "(" <b:Node*> "." <a:Node> ")" => {
-        let mut v = b.clone();
-        v.push(a);
-        Node::DottedList(v)
-    },
+    "(" <b:Node*> "." <a:Node> ")" => Node::DottedList(b, Box::new(a)),
     Bool => Node::Bool(<>),
     Number => Node::Number(<>),
     Str => Node::String(<>),
@@ -23,8 +19,8 @@ Bool: bool = {
 };
 
 Number: ast::Number = {
-    r"[0-9]+" => ast::Number::Exact(<>.parse().unwrap()),
-    r"[0-9]+\.[0-9]+" => ast::Number::Inexact(<>.parse().unwrap()),
+    r"[\+\-]?[0-9]+" => ast::Number::Exact(<>.parse().unwrap()),
+    r"[\+\-]?[0-9]+\.[0-9]+" => ast::Number::Inexact(<>.parse().unwrap()),
 };
 
 Str: String = {
@@ -43,8 +39,8 @@ match {
     r"(?i)if" => "if",
     r"(?i)#t" => "#t",
     r"(?i)#f" => "#f",
-    r"[0-9]+",
-    r"[0-9]+\.[0-9]+",
+    r"[\+\-]?[0-9]+",
+    r"[\+\-]?[0-9]+\.[0-9]+",
     r#""(\\\\|\\"|[^\\"])*""# => str_lit,
 } else {
     r"[a-zA-Z!\$%\*/:<=>\?~_\^][a-zA-Z!\$%\*/:<=>\?~_\^0-9\.\+\-]*" => ident,

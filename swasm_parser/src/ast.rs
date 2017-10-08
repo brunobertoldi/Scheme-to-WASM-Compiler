@@ -7,7 +7,7 @@ pub enum Node {
     String(String),
     Ident(String),
     List(Vec<Node>),
-    DottedList(Vec<Node>),
+    DottedList(Vec<Node>, Box<Node>),
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
