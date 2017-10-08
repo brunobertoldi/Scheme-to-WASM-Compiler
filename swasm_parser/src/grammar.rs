@@ -10,6 +10,16 @@ macro_rules! test_parse {
     };
 }
 
+macro_rules! test_err {
+    (
+        $( $source:expr ),*,
+    ) => {
+        $(
+            parse_Node($source).unwrap_err();
+        )*
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::parse_Node;
@@ -41,10 +51,10 @@ mod tests {
             "\"abc\"" => strnode("abc"),
             r#""abc\"\\""# => strnode(r#"abc"\"#),
 
-            "id" => idnode("id"),
+            "a1" => idnode("a1"),
+            "id.ent+-" => idnode("id.ent+-"),
             "LoWeR" => idnode("lower"),
             "$" => idnode("$"),
-            "a1" => idnode("a1"),
             "+" => idnode("+"),
             "-" => idnode("-"),
             "..." => idnode("..."),
@@ -53,6 +63,33 @@ mod tests {
             "(#t 12 a)" => Node::List(vec![Node::Bool(true), exact(12), idnode("a")]),
 
             "(a . b)" => Node::DottedList(vec![idnode("a")], Box::new(idnode("b"))),
+        };
+    }
+
+    #[test]
+    fn test_invalid_node() {
+        test_err! {
+            "#",
+            "#tr",
+            "#fa",
+            "#abc",
+
+            ".1",
+            "1.",
+
+            "\"",
+            "\"abc",
+            r#""\""#,
+
+            "+a",
+            "-a",
+            ".a",
+
+            "(",
+            "(#t 12 a",
+
+            "(a .",
+            "(. b",
         };
     }
 }
