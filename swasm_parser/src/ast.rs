@@ -1,13 +1,13 @@
 #[derive(Clone, Debug, PartialEq)]
-pub enum Node {
+pub enum SExpr {
     Quote,
     If,
     Bool(bool),
     Number(Number),
     String(String),
     Ident(String),
-    List(Vec<Node>),
-    DottedList(Vec<Node>, Box<Node>),
+    List(Vec<SExpr>),
+    DottedList(Vec<SExpr>, Box<SExpr>),
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]

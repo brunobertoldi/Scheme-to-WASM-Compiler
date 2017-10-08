@@ -1,44 +1,44 @@
 include!(concat!(env!("OUT_DIR"), "/grammar.rs"));
 
-macro_rules! test_parse {
-    (
-        $( $source:expr => $expected:expr ),*,
-    ) => {
-        $(
-            assert_eq!($expected, parse_Node($source).unwrap());
-        )*
-    };
-}
-
-macro_rules! test_err {
-    (
-        $( $source:expr ),*,
-    ) => {
-        $(
-            parse_Node($source).unwrap_err();
-        )*
-    };
-}
-
 #[cfg(test)]
 mod tests {
-    use super::parse_Node;
-    use ast::{Node, Number};
+    macro_rules! test_parse {
+        (
+            $( $source:expr => $expected:expr ),*,
+        ) => {
+            $(
+                assert_eq!($expected, parse_SExpr($source).unwrap());
+            )*
+        };
+    }
 
-    fn strnode<S: Into<String>>(s: S) -> Node { Node::String(s.into()) }
-    fn idnode<S: Into<String>>(s: S) -> Node { Node::Ident(s.into()) }
-    fn exact(i: i64) -> Node { Node::Number(Number::Exact(i)) }
-    fn inexact(f: f64) -> Node { Node::Number(Number::Inexact(f)) }
+    macro_rules! test_err {
+        (
+            $( $source:expr ),*,
+        ) => {
+            $(
+                parse_SExpr($source).unwrap_err();
+            )*
+        };
+    }
+
+    use super::parse_SExpr;
+    use ast::{SExpr, Number};
+
+    fn strnode<S: Into<String>>(s: S) -> SExpr { SExpr::String(s.into()) }
+    fn idnode<S: Into<String>>(s: S) -> SExpr { SExpr::Ident(s.into()) }
+    fn exact(i: i64) -> SExpr { SExpr::Number(Number::Exact(i)) }
+    fn inexact(f: f64) -> SExpr { SExpr::Number(Number::Inexact(f)) }
 
     #[test]
     fn test_node_happy_path() {
         test_parse! {
-            "'" => Node::Quote,
-            "quote" => Node::Quote,
-            "if" => Node::If,
+            "'" => SExpr::Quote,
+            "quote" => SExpr::Quote,
+            "if" => SExpr::If,
 
-            "#t" => Node::Bool(true),
-            "#f" => Node::Bool(false),
+            "#t" => SExpr::Bool(true),
+            "#f" => SExpr::Bool(false),
 
             "12" => exact(12),
             "+12" => exact(12),
@@ -59,10 +59,10 @@ mod tests {
             "-" => idnode("-"),
             "..." => idnode("..."),
 
-            "()" => Node::List(Vec::new()),
-            "(#t 12 a)" => Node::List(vec![Node::Bool(true), exact(12), idnode("a")]),
+            "()" => SExpr::List(Vec::new()),
+            "(#t 12 a)" => SExpr::List(vec![SExpr::Bool(true), exact(12), idnode("a")]),
 
-            "(a . b)" => Node::DottedList(vec![idnode("a")], Box::new(idnode("b"))),
+            "(a . b)" => SExpr::DottedList(vec![idnode("a")], Box::new(idnode("b"))),
         };
     }
 

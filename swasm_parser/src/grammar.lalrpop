@@ -1,16 +1,16 @@
-use ast::{self, Node};
+use ast::{self, SExpr};
 
 grammar;
 
-pub Node: Node = {
-    "'|quote" => Node::Quote,
-    "if" => Node::If,
-    "(" <Node*> ")" => Node::List(<>),
-    "(" <b:Node*> "." <a:Node> ")" => Node::DottedList(b, Box::new(a)),
-    Bool => Node::Bool(<>),
-    Number => Node::Number(<>),
-    Str => Node::String(<>),
-    Ident => Node::Ident(<>),
+pub SExpr: SExpr = {
+    "'|quote" => SExpr::Quote,
+    "if" => SExpr::If,
+    "(" <SExpr*> ")" => SExpr::List(<>),
+    "(" <b:SExpr*> "." <a:SExpr> ")" => SExpr::DottedList(b, Box::new(a)),
+    Bool => SExpr::Bool(<>),
+    Number => SExpr::Number(<>),
+    Str => SExpr::String(<>),
+    Ident => SExpr::Ident(<>),
 };
 
 Bool: bool = {
