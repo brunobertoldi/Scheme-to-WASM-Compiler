@@ -1,0 +1,12 @@
+[package]
+name = "swasm_parser"
+version = "0.1.0"
+authors = ["Rodrigo C. Gryzinski <rogryza@gmail.com>"]
+build = "build.rs"
+
+[dependencies]
+lalrpop-util = "0.13.1"
+regex = "0.2.1"
+
+[build-dependencies]
+lalrpop = "0.13.1"

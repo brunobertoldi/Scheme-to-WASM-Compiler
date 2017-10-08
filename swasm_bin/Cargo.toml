@@ -1,0 +1,6 @@
+[package]
+name = "swasm_bin"
+version = "0.1.0"
+authors = ["Rodrigo C. Gryzinski <rogryza@gmail.com>"]
+
+[dependencies]

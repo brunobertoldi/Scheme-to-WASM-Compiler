@@ -1,8 +1,6 @@
 [package]
-name = "scheme_wasm"
+name = "swasm"
 version = "0.1.0"
 authors = ["Rodrigo C. Gryzinski <rogryza@gmail.com>"]
-build = "build.rs"
 
 [dependencies]
-lazy_static = "0.2.8"

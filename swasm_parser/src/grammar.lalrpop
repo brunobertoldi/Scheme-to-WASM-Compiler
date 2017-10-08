@@ -1,0 +1,52 @@
+use ast::{self, Node};
+
+grammar;
+
+pub Node: Node = {
+    "'|quote" => Node::Quote,
+    "if" => Node::If,
+    "(" <Node*> ")" => Node::List(<>),
+    "(" <b:Node*> "." <a:Node> ")" => {
+        let mut v = b.clone();
+        v.push(a);
+        Node::DottedList(v)
+    },
+    Bool => Node::Bool(<>),
+    Number => Node::Number(<>),
+    Str => Node::String(<>),
+    Ident => Node::Ident(<>),
+};
+
+Bool: bool = {
+   "#t" => true,
+   "#f" => false,
+};
+
+Number: ast::Number = {
+    r"[0-9]+" => ast::Number::Exact(<>.parse().unwrap()),
+    r"[0-9]+\.[0-9]+" => ast::Number::Inexact(<>.parse().unwrap()),
+};
+
+Str: String = {
+    str_lit => <>[1..<>.len()-1].replace(r"\\", r"\").replace(r#"\""#, "\""),
+};
+
+Ident: String = {
+    "+" => <>.to_owned(),
+    "-" => <>.to_owned(),
+    "..." => <>.to_owned(),
+    ident => <>.to_lowercase(),
+};
+
+match {
+    r"(?i)'|quote" => "'|quote",
+    r"(?i)if" => "if",
+    r"(?i)#t" => "#t",
+    r"(?i)#f" => "#f",
+    r"[0-9]+",
+    r"[0-9]+\.[0-9]+",
+    r#""(\\\\|\\"|[^\\"])*""# => str_lit,
+} else {
+    r"[a-zA-Z!\$%\*/:<=>\?~_\^][a-zA-Z!\$%\*/:<=>\?~_\^0-9\.\+\-]*" => ident,
+    _
+}
