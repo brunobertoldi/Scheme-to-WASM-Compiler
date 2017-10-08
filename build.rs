@@ -80,6 +80,7 @@ impl<'a> From<&'a str> for Error {
 }
 
 struct Production {
+    name: String,
     param: Option<String>,
     is_token: bool,
     inputs: Vec<ProductionInput>,
@@ -183,14 +184,7 @@ fn read_until<'a>(r: &mut ByteIter, pats: &[&'a Pattern]) -> Result<(Vec<u8>, u8
     }
 }
 
-struct PartialProduction {
-    name: String,
-    param: Option<String>,
-    is_token: bool,
-    remaining: Vec<u8>,
-}
-
-fn parse_left(source: &mut ByteIter) -> Result<PartialProduction> {
+fn parse_line(source: &mut ByteIter) -> Result<Production> {
     let is_token = match source.peek() {
         Some(&Ok(b'_')) => false,
         _ => true,
@@ -210,16 +204,14 @@ fn parse_left(source: &mut ByteIter) -> Result<PartialProduction> {
         None
     };
 
-    let (remaining, _) = read_until(source, &[&b'\n'])?;
-
-    let partial =PartialProduction {
+    let production = Production {
         name: String::from_utf8(ident)?,
         param: param,
         is_token: is_token,
-        remaining: remaining,
+        inputs: parse_right(source)?,
     };
 
-    Ok(partial)
+    Ok(production)
 }
 
 fn parse_word(word: &[u8]) -> Result<FormatPart> {
@@ -248,12 +240,11 @@ fn parse_word(word: &[u8]) -> Result<FormatPart> {
     })
 }
 
-fn parse_right(right: &[u8]) -> Result<Vec<ProductionInput>> {
-    let mut source = right.iter().map(|c| Ok(*c)).peekable();
+fn parse_right(source: &mut ByteIter) -> Result<Vec<ProductionInput>> {
     let mut last_delim = Some(b'|');
     let mut inputs = Vec::new();
     while last_delim != None {
-        let (raw_fmt, delim) = read_until_opt(&mut source, &[&b'|'])?;
+        let (raw_fmt, delim) = read_until_opt(source, &[&b'|', &b'\n'])?;
         last_delim = delim;
 
         if raw_fmt.len() == 4 && raw_fmt[1] == b'.' && raw_fmt[2] == b'.' {
@@ -298,31 +289,48 @@ fn parse_right(right: &[u8]) -> Result<Vec<ProductionInput>> {
     Ok(inputs)
 }
 
-fn parse_grammar(source: &mut ByteIter) -> Result<HashMap<String, Production>> {
-    let mut partials = Vec::new();
+fn parse_tokens(source: &mut ByteIter) -> Result<Vec<Production>> {
+    let mut productions = Vec::new();
+
     while source.peek().is_some() {
-        partials.push(parse_left(source)?);
+        let prod = parse_line(source)?;
+        productions.push(prod);
     }
 
-    let mut result = HashMap::new();
-    for partial in partials {
-        result.insert(partial.name, Production {
-            param: partial.param,
-            is_token: partial.is_token,
-            inputs: parse_right(&partial.remaining)?,
-        });
-    }
+    Ok(productions)
+}
 
-    Ok(result)
+#[derive(Hash, PartialEq, Eq, PartialOrd, Ord)]
+enum State<'a> {
+    Ready,
+    Token {
+        name: &'a str,
+        index: u8,
+    },
+}
+
+#[derive(Hash, PartialEq, Eq, PartialOrd, Ord)]
+struct TransitionInput<'a> {
+    state: State<'a>,
+    current: u8,
+    next: Option<u8>,
 }
 
 fn compile(input: File, output: &mut Write) -> Result<()> {
-    let productions = parse_grammar(&mut input.bytes().peekable())?;
-    for (name, prod) in productions {
+    let productions = parse_tokens(&mut input.bytes().peekable())?;
+    let trans_table = HashMap::new();
+    let index_map: HashMap<_, _> = productions.iter().enumerate().map(|(i, p)| (p.name.clone(), i)).collect();
+
+    for prod in productions {
+        let from_states = vec![State::Ready];
+        for 
+    }
+
+    for prod in productions {
         if !prod.is_token {
             output.write(b"_")?;
         }
-        write!(output, "{}", name)?;
+        write!(output, "{}", prod.name)?;
         if let Some(param) = prod.param {
             write!(output, "({})", param)?;
         }
@@ -362,7 +370,7 @@ fn compile(input: File, output: &mut Write) -> Result<()> {
 
 fn main() {
     let cwd = env::current_dir().unwrap();
-    let source_path = Path::new(&cwd).join("grammar");
+    let source_path = Path::new(&cwd).join("tokens");
     let in_f = File::open(&source_path).unwrap();
 
     let out_dir = env::var("OUT_DIR").unwrap();

@@ -3,7 +3,7 @@ CloseParen -> )
 Quote -> ' | quote
 Lambda -> lambda
 If -> if
-Bool(bool) -> # t => true | # f => false
+Bool(bool) -> #t => true | #f => false
 Exact(i64) -> Digit+ | + Digit+ | - Digit+
 Inexact(f64) -> Exact . Digit*
 String(String) -> "_ StringCharacter* "_
